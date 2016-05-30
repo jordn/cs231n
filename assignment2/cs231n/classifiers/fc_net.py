@@ -240,7 +240,8 @@ class FullyConnectedNet(object):
     # layer, etc.                                                              #
     ############################################################################
 
-    cache = [0] * (self.num_layers+1) # (x, w, b)for that layer.
+    cache = [0] * (self.num_layers+1) # (x, w, b) for that layer.
+    dropout_cache = [0] * (self.num_layers+1) # (dropout_param, mask) for layer.
 
     A = X  # Activations
 
@@ -248,6 +249,8 @@ class FullyConnectedNet(object):
     for l in range(1, self.num_layers):
       A, cache[l] = affine_relu_forward(A, self.params['W' + str(l)],
                       self.params['b' + str(l)])
+      if self.use_dropout:
+        A, dropout_cache[l] = dropout_forward(A, self.dropout_param)
 
     # Final layer is affine-softmax
     l = self.num_layers
@@ -282,6 +285,8 @@ class FullyConnectedNet(object):
     dA, grads['W' + str(l)], grads['b' + str(l)] = affine_backward(dA, cache[l])
 
     for l in range(self.num_layers-1, 0, -1):
+      if self.use_dropout:
+        dA = dropout_backward(dA, dropout_cache[l])
       dA, grads['W' + str(l)], grads['b' + str(l)] = affine_relu_backward(dA, cache[l])
 
     # Regularization
