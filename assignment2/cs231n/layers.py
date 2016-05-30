@@ -169,7 +169,44 @@ def batchnorm_forward(x, gamma, beta, bn_param):
     # the momentum variable to update the running mean and running variance,    #
     # storing your result in the running_mean and running_var variables.        #
     #############################################################################
-    pass
+    sample_mean = np.mean(x, axis=0)
+    sample_var = np.var(x, axis=0)
+
+    N, D = x.shape
+
+    # Step 1: calculate mean
+    mu = 1./N * np.sum(x, axis = 0)
+
+    # Step 2: subtract mean vector of every trainings example
+    xmu = x - mu
+
+    # Step 3: following the lower branch - calculation denominator
+    sq = xmu ** 2
+
+    # Step 4: calculate variance
+    var = 1./N * np.sum(sq, axis = 0)
+
+    # Step 5: add eps for numerical stability, then sqrt
+    sigma = np.sqrt(var + eps)
+
+    # Step 6: invert sigma
+    invsigma = 1./sigma
+
+    # Step 7: execute normalization
+    xnorm = xmu * invsigma
+
+    # Step 8: optional anti-scale
+    gammax = gamma * xnorm
+
+    # Step 9: optional anti-center
+    out = gammax + beta
+
+    # Store intermediate values for backprop.
+    cache = (xnorm, gamma, xmu, invsigma, sigma, var, eps)
+
+    running_mean = momentum * running_mean + (1 - momentum) * mu
+    running_var = momentum * running_var + (1 - momentum) * var
+
     #############################################################################
     #                             END OF YOUR CODE                              #
     #############################################################################
@@ -180,7 +217,8 @@ def batchnorm_forward(x, gamma, beta, bn_param):
     # and shift the normalized data using gamma and beta. Store the result in   #
     # the out variable.                                                         #
     #############################################################################
-    pass
+    x_norm = (x - running_mean) / (np.sqrt(running_var) + eps)
+    out = gamma * x_norm + beta
     #############################################################################
     #                             END OF YOUR CODE                              #
     #############################################################################
@@ -216,7 +254,46 @@ def batchnorm_backward(dout, cache):
   # TODO: Implement the backward pass for batch normalization. Store the      #
   # results in the dx, dgamma, and dbeta variables.                           #
   #############################################################################
-  pass
+  xnorm, gamma, xmu, invsigma, sigma, var, eps = cache
+  N, D = dout.shape
+
+  # Step 9: optional anti-center
+  dbeta = np.sum(dout, axis=0)
+  dgammax = dout
+  assert(dbeta.shape == (D,))
+
+  # Step 8: optional anti-scale
+  dgamma = np.sum(dgammax * xnorm, axis=0)
+  dxnorm = gamma * dgammax
+  assert(dgamma.shape == (D,))
+
+  # Step 7: normalization
+  dxmu_top = dxnorm * invsigma
+  dinvsigma = np.sum(dxnorm * xmu, axis=0)
+
+  # Step 6: (lower branch) invert sigma
+  dsigma = dinvsigma * (-sigma**(-2))
+
+  # Step 5: sqrt (with eps for numerical stability)
+  dvar = dsigma * 0.5 * (var + eps)**(-0.5)
+
+  # Step 4: calc variance
+  dsq = dvar * 1.0/N
+
+  # Step 3: lower branch gradient
+  dxmu_bottom = dsq * 2 * xmu
+
+  # Step 2: upper branch gradient
+  dx_top = (dxmu_bottom + dxmu_top)
+  dmu = -np.sum(dxmu_bottom + dxmu_top, axis=0)
+
+  # Step 1
+  dx_bottom = 1.0/N * dmu
+
+  # Step 0
+  dx = dx_bottom + dx_top
+  assert(dx.shape == (N,D))
+
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
@@ -246,7 +323,26 @@ def batchnorm_backward_alt(dout, cache):
   # should be able to compute gradients with respect to the inputs in a       #
   # single statement; our implementation fits on a single 80-character line.  #
   #############################################################################
-  pass
+  xnorm, gamma, xmu, invsigma, sigma, var, eps = cache
+  N, D = xmu.shape
+
+  # Step 9: optional anti-center
+  dbeta = np.sum(dout, axis=0)
+
+  # Step 8: optional anti-scale
+  dgamma = np.sum(dout * xnorm, axis=0)
+
+
+  # TODO: get dx in one line.
+  dxmu_top = gamma * dout * invsigma
+  dinvsigma = np.sum(gamma * dout * xmu, axis=0)
+  dx = -1.0/N*xmu*dinvsigma*sigma**(-3) + dxmu_top - \
+        1.0/N * np.sum(-xmu*dinvsigma*sigma**(-3) + dxmu_top, axis=0)
+  assert(dbeta.shape == (D,))
+  assert(dgamma.shape == (D,))
+  assert(dx.shape == (N,D))
+
+
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################

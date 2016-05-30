@@ -182,6 +182,12 @@ class FullyConnectedNet(object):
     for l in range(1, len(dims)):
       self.params['W' + str(l)] = np.random.normal(0, weight_scale, (dims[l-1], dims[l]))
       self.params['b' + str(l)] = np.zeros(dims[l])
+
+    if self.use_batchnorm:
+      for l in range(1, len(dims)-1):
+        self.params['gamma' + str(l)] = np.ones(dims[l-1])
+        self.params['beta' + str(l)] = np.zeros(dims[l-1])
+
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
@@ -242,13 +248,22 @@ class FullyConnectedNet(object):
 
     cache = [0] * (self.num_layers+1) # (x, w, b) for that layer.
     dropout_cache = [0] * (self.num_layers+1) # (dropout_param, mask) for layer.
+    bn_cache = [0] * (self.num_layers+1) # (dropout_param, mask) for layer.
 
     A = X  # Activations
 
     # Up through affine-relu layers
     for l in range(1, self.num_layers):
+      if self.use_batchnorm:
+        shape = A.shape
+        A = A.reshape(shape[0], np.product(shape[1:]))
+        A, bn_cache[l] = batchnorm_forward(A, self.params['gamma' + str(l)],
+                          self.params['beta' + str(l)], self.bn_params[l-1])
+        A = A.reshape(shape)
+
       A, cache[l] = affine_relu_forward(A, self.params['W' + str(l)],
                       self.params['b' + str(l)])
+
       if self.use_dropout:
         A, dropout_cache[l] = dropout_forward(A, self.dropout_param)
 
@@ -287,7 +302,15 @@ class FullyConnectedNet(object):
     for l in range(self.num_layers-1, 0, -1):
       if self.use_dropout:
         dA = dropout_backward(dA, dropout_cache[l])
+
       dA, grads['W' + str(l)], grads['b' + str(l)] = affine_relu_backward(dA, cache[l])
+
+      if self.use_batchnorm:
+        shape = dA.shape
+        dA = dA.reshape(shape[0], np.product(shape[1:]))
+        dA, grads['gamma' + str(l)], grads['beta' + str(l)] = batchnorm_backward(
+                                                              dA, bn_cache[l])
+        dA = dA.reshape(shape)
 
     # Regularization
     sum_squared_weights = 0
