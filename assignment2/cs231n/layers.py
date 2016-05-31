@@ -507,7 +507,6 @@ def conv_backward_naive(dout, cache):
   pad = conv_param['pad']
   stride = conv_param['stride']
 
-  print dout.shape
   (N, C, H, W) = x.shape
   (F, C, HH, WW) = w.shape
 
@@ -560,7 +559,29 @@ def max_pool_forward_naive(x, pool_param):
   #############################################################################
   # TODO: Implement the max pooling forward pass                              #
   #############################################################################
-  pass
+  stride = pool_param['stride']
+  HH = pool_param['pool_height']
+  WW = pool_param['pool_width']
+
+  (N, C, H, W) = x.shape
+  Hdash = 1 + (H-HH)/stride
+  Wdash = 1 + (W-WW)/stride
+  out = np.zeros((N, C, Hdash, Wdash))
+
+  # For each example
+  for n in range(N):
+
+    # For each layer ("channel")
+    for c in range(C):
+
+      # Max pool
+      for i in range(Hdash):
+        hs = i * stride
+        for j in range(Wdash):
+          ws = j * stride
+          x_block = x[n, c, hs:hs+HH, ws:ws+WW]
+          out[n, c, i, j] = x_block.max()
+
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
@@ -583,7 +604,32 @@ def max_pool_backward_naive(dout, cache):
   #############################################################################
   # TODO: Implement the max pooling backward pass                             #
   #############################################################################
-  pass
+  x, pool_param = cache
+  stride = pool_param['stride']
+  HH = pool_param['pool_height']
+  WW = pool_param['pool_width']
+
+  N, C, H, W = x.shape
+  Hdash = 1 + (H-HH)/stride
+  Wdash = 1 + (W-WW)/stride
+
+  dx = np.zeros_like(x)
+
+  # For each example
+  for n in range(N):
+
+    # For each layer ("channel")
+    for c in range(C):
+
+      # Max pool backprop
+      for i in range(Hdash):
+        hs = i * stride
+        for j in range(Wdash):
+          ws = j * stride
+          x_block = x[n, c, hs:hs+HH, ws:ws+WW]
+          dx[n, c, hs:hs+HH, ws:ws+WW] += (x_block == x_block.max()) * dout[n, c, i, j]
+
+
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
