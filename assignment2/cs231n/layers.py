@@ -455,7 +455,30 @@ def conv_forward_naive(x, w, b, conv_param):
   # TODO: Implement the convolutional forward pass.                           #
   # Hint: you can use the function np.pad for padding.                        #
   #############################################################################
-  pass
+  pad = conv_param['pad']
+  stride = conv_param['stride']
+  (N, C, H, W) = x.shape
+  (F, C, HH, WW) = w.shape
+
+  Hdash = 1 + (H+2*pad-HH)/stride
+  Wdash = 1 + (W+2*pad-WW)/stride
+  out = np.zeros((N, F, Hdash, Wdash))
+  x_pad = np.pad(x, [(0,0), (0,0), (pad,pad), (pad,pad)], mode='constant')
+  (N, C, Hp, Wp) = x_pad.shape
+
+  # For each image
+  for n in range(N):
+
+    # For each filter
+    for f in range(F): # jth filter
+
+      # Convolve
+      for i in range(Hdash):
+        for j in range(Wdash):
+          x_block = x_pad[n, :, i*stride:i*stride+HH, j*stride:j*stride+WW]
+          out[n, f, i, j] = np.sum(x_block * w[f]) + b[f]
+
+
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
@@ -480,7 +503,38 @@ def conv_backward_naive(dout, cache):
   #############################################################################
   # TODO: Implement the convolutional backward pass.                          #
   #############################################################################
-  pass
+  (x, w, b, conv_param) = cache
+  pad = conv_param['pad']
+  stride = conv_param['stride']
+
+  print dout.shape
+  (N, C, H, W) = x.shape
+  (F, C, HH, WW) = w.shape
+
+  Hdash = 1 + (H+2*pad-HH)/stride
+  Wdash = 1 + (W+2*pad-WW)/stride
+  x_pad = np.pad(x, [(0,0), (0,0), (pad,pad), (pad,pad)], mode='constant')
+
+  dx_pad = np.zeros_like(x_pad)
+  dw = np.zeros_like(w)
+  db = np.zeros_like(b)
+
+  # For each image
+  for n in range(N):
+
+    # For each filter
+    for f in range(F): # jth filter
+
+      # Backprop convolve
+      for i in range(Hdash):
+        for j in range(Wdash):
+          x_block = x_pad[n, :, i*stride:i*stride+HH, j*stride:j*stride+WW]
+          db[f] += dout[n, f, i, j]
+          dw[f] += x_block * dout[n, f, i, j]
+          dx_pad[n, :, i*stride:i*stride+HH, j*stride:j*stride+WW] += w[f] * dout[n, f, i, j]
+
+  dx = dx_pad[:,:,1:-1,1:-1]
+
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
