@@ -144,9 +144,11 @@ class CaptioningRNN(object):
     # 2) Transform the captions_in to their embeddings, x (N, T, W).
     x, word_cache = word_embedding_forward(captions_in, W_embed)
 
-    # 3) Use vanilla RNN (TODO LSTM) to produce hidden state vectors at each
-    # timestep, h (N, T, H)
-    h, rnn_cache = rnn_forward(x, h0, Wx, Wh, b)
+    # 3) Produce hidden state vectors at each timestep, h (N, T, H)
+    if self.cell_type == 'rnn':
+      h, rnn_cache = rnn_forward(x, h0, Wx, Wh, b)
+    elif self.cell_type == 'lstm':
+      h, rnn_cache = lstm_forward(x, h0, Wx, Wh, b)
 
     # 4) Compute scores for each word (timestep), scores (N, T, V)
     scores, scores_cache = temporal_affine_forward(h, W_vocab, b_vocab)
@@ -161,7 +163,10 @@ class CaptioningRNN(object):
     dh, grads['W_vocab'], grads['b_vocab'] = temporal_affine_backward(dout, scores_cache)
 
     # 3) RNN gradients
-    dx, dh0, grads['Wx'], grads['Wh'], grads['b'] = rnn_backward(dh, rnn_cache)
+    if self.cell_type == 'rnn':
+      dx, dh0, grads['Wx'], grads['Wh'], grads['b'] = rnn_backward(dh, rnn_cache)
+    elif self.cell_type == 'lstm':
+      dx, dh0, grads['Wx'], grads['Wh'], grads['b'] = lstm_backward(dh, rnn_cache)
 
     # 2) Word embedding gradients
     grads['W_embed'] = word_embedding_backward(dx, word_cache)
@@ -237,20 +242,26 @@ class CaptioningRNN(object):
     # Initial hidden state from the image features, h0 (N, H).
     h, features_cache = affine_forward(features, W_proj, b_proj)
 
+    if self.cell_type == 'lstm':
+      c = np.zeros_like(h)
+
     # First word is the <START> token
     x = self.params['W_embed'][self._start]
 
     for t in np.arange(max_length):
+      if self.cell_type == 'rnn':
         h, cache = rnn_step_forward(x, h, Wx, Wh, b)
+      elif self.cell_type == 'lstm':
+        h, c, cache = lstm_step_forward(x, h, c, Wx, Wh, b)
 
-        # 4) Compute scores for each word
-        scores, scores_cache = affine_forward(h, W_vocab, b_vocab)
+      # 4) Compute scores for each word
+      scores, scores_cache = affine_forward(h, W_vocab, b_vocab)
 
-        # Select 'best' word
-        word_idxs = np.argmax(scores, axis=1)
+      # Select 'best' word
+      word_idxs = np.argmax(scores, axis=1)
 
-        captions[:, t] = word_idxs
-        x = self.params['W_embed'][word_idxs]
+      captions[:, t] = word_idxs
+      x = self.params['W_embed'][word_idxs]
 
 
     ############################################################################
